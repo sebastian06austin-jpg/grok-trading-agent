@@ -4,11 +4,11 @@ import yfinance as yf
 import pandas as pd
 import pandas_ta as ta
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 # === SETTINGS ===
 TICKERS = ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "SBIN.NS", "ICICIBANK.NS", "ITC.NS", "BHARTIARTL.NS", "HINDUNILVR.NS", "LT.NS",
-           "AAPL", "NVDA", "TSLA", "MSFT", "GOOGL", "^NSEI"]  # Top Indian + Global + Nifty
+           "AAPL", "NVDA", "TSLA", "MSFT", "GOOGL", "^NSEI"]
 
 client = OpenAI(api_key=os.environ["XAI_API_KEY"], base_url="https://api.x.ai/v1")
 
@@ -16,9 +16,10 @@ def send_telegram(message):
     url = f"https://api.telegram.org/bot{os.environ['TELEGRAM_TOKEN']}/sendMessage"
     requests.post(url, json={"chat_id": os.environ["TELEGRAM_CHAT_ID"], "text": message, "parse_mode": "HTML"})
 
-# Detect morning or evening
-now_ist = datetime.utcnow().hour + 5.5
-is_morning = now_ist < 12
+# Proper IST time (no deprecation warning)
+utc_now = datetime.now(timezone.utc)
+ist_now = utc_now + timedelta(hours=5, minutes=30)
+is_morning = ist_now.hour < 12
 report_title = "🌅 Morning Intelligence Briefing" if is_morning else "🌆 Evening Market Debrief"
 
 # === FETCH SUPER DATA ===
@@ -27,16 +28,12 @@ for t in TICKERS:
     try:
         stock = yf.Ticker(t)
         hist_1y = stock.history(period="1y")
-        hist_1mo = stock.history(period="1mo")
-        
         if len(hist_1y) < 50:
             data[t] = "Insufficient data"
             continue
-            
         close = hist_1y['Close']
         volume = hist_1y['Volume']
         
-        # Professional indicators
         rsi = ta.rsi(close, length=14).iloc[-1]
         macd = ta.macd(close).iloc[-1]['MACD_12_26_9']
         bb = ta.bbands(close).iloc[-1]
@@ -65,56 +62,53 @@ for t in TICKERS:
     except:
         data[t] = "Data error"
 
-# === SUPER PROMPT FOR FULL RESEARCH + DECISION MAKING ===
-prompt = f"""You are EliteSuperTrader — a multi-agent super-computer trading team (Grok 4.20 Multi-Agent).
+# === SUPER PROMPT (4-agent simulation + full research) ===
+prompt = f"""You are EliteSuperTrader — a 4-agent super-computer team (Captain for strategy, Harper for technicals, Benjamin for fundamentals, Lucas for risk). 
 Today is {datetime.now().strftime('%Y-%m-%d %H:%M')} IST. Report type: {report_title}
 
 Full market data:
 {data}
 
-INSTRUCTIONS FOR SUPER DETAILED REPORT:
-1. ALWAYS analyze EVERY single ticker — even if price is flat or no change.
-2. Show your complete research process and step-by-step decision making (like internal agent debate).
-3. Structure the report exactly like this:
+INSTRUCTIONS:
+- Act as all 4 agents debating internally before final answer (show the debate in your reasoning).
+- Analyze EVERY single ticker in detail — even if price is completely flat or no change.
+- Show complete research process and step-by-step decision making.
+- Structure exactly like this:
 
 {report_title}
 
 MARKET OVERVIEW
-- Nifty 50 summary
-- Overall sentiment & key global factors
+- Nifty 50 summary + key global factors + overall sentiment
 
 DETAILED ANALYSIS FOR EVERY TICKER
 For each stock:
 • Current price & 1-day change
 • Technical breakdown (RSI, MACD, Bollinger Bands, ATR volatility)
-• Volume analysis
-• Fundamentals (PE, EPS if available)
-• Full reasoning: why this setup has edge or no edge today
-• Risk assessment
+• Volume surge analysis
+• Fundamentals (PE, EPS)
+• Full agent debate reasoning: why edge exists or not today
+• Risk assessment (volatility, stop distance)
 
 FINAL RECOMMENDATIONS
-Top 3–5 setups with:
+Top 3–5 setups:
 - Action (BUY/SELL/HOLD)
-- Suggested Entry, Stop-Loss, Target
-- Exact risk-reward ratio
+- Suggested Entry, Stop-Loss, Target (with exact risk-reward ratio)
 - Confidence % 
 - Full plain-English explanation of the entire decision chain
 
-RISK MANAGEMENT RULES
-- Never risk more than 1% of capital
-- Conservative approach
+RISK RULES: Never risk >1% capital. Stay extremely conservative.
 
-Be extremely thorough, show all math and logic, never skip any stock. Use Indian Rupee for .NS stocks.
+Be extremely thorough, show all math and logic, never skip any stock. Use ₹ for .NS stocks.
 
-Output only this full structured report. No extra text."""
+Output ONLY this full structured report."""
 
 response = client.chat.completions.create(
-    model="grok-4.20-multi-agent-beta-0309",
+    model="grok-4.20-beta-0309-reasoning",
     messages=[
-        {"role": "system", "content": "You are a professional risk-managed trading super-computer. Always show full reasoning."},
+        {"role": "system", "content": "You are a professional risk-managed trading super-computer. Always show full internal agent debate and reasoning."},
         {"role": "user", "content": prompt}
     ],
-    max_tokens=2500,
+    max_tokens=3000,
     temperature=0.7
 )
 
