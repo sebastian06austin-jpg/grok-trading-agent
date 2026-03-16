@@ -1,12 +1,11 @@
 import os
 from openai import OpenAI
 import yfinance as yf
-import pandas as pd
 import requests
 from datetime import datetime
 
 # === YOUR SETTINGS ===
-TICKERS = ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "AAPL", "NVDA", "TSLA", "MSFT"]  # Indian + global
+TICKERS = ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "SBIN.NS", "AAPL", "NVDA", "TSLA", "MSFT"]
 
 client = OpenAI(api_key=os.environ["XAI_API_KEY"], base_url="https://api.x.ai/v1")
 
@@ -14,16 +13,23 @@ def send_telegram(message):
     url = f"https://api.telegram.org/bot{os.environ['TELEGRAM_TOKEN']}/sendMessage"
     requests.post(url, json={"chat_id": os.environ["TELEGRAM_CHAT_ID"], "text": message, "parse_mode": "HTML"})
 
-# Fetch data
+# Fetch data safely
 data = {}
 for t in TICKERS:
-    stock = yf.Ticker(t)
-    hist = stock.history(period="1y")
-    if not hist.empty:
-        current = hist['Close'][-1]
-        sma50 = hist['Close'].rolling(50).mean()[-1]
-        change = (current - hist['Close'][-2]) / hist['Close'][-2] * 100
-        data[t] = f"Price: ₹{current:.2f} | 1d change: {change:.2f}% | 50-day avg: ₹{sma50:.2f}"
+    try:
+        stock = yf.Ticker(t)
+        hist = stock.history(period="1y")
+        if len(hist) >= 2:
+            close = hist['Close']
+            current = close.iloc[-1]
+            prev = close.iloc[-2]
+            sma50 = close.rolling(50).mean().iloc[-1]
+            change = (current - prev) / prev * 100
+            data[t] = f"Price: {current:.2f} | 1d change: {change:.2f}% | 50-day avg: {sma50:.2f}"
+        else:
+            data[t] = "No recent data available"
+    except Exception:
+        data[t] = "Data fetch error (safe skip)"
 
 # Send to Grok
 prompt = f"""You are EliteTrade Agent – the most accurate financial reasoning AI.
@@ -50,4 +56,4 @@ response = client.chat.completions.create(
 
 result = response.choices[0].message.content
 send_telegram(f"<b>Grok Daily Trading Report</b>\n\n{result}")
-print("Report sent!")
+print("Report sent successfully!")
