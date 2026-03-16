@@ -1,4 +1,4 @@
-name: Super Grok Trading Agent (Twice Daily)
+name: Super Grok Trading Agent - Twice Daily
 
 on:
   schedule:
@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Set up Python
-        uses: actions/setup-python@v6.2.0
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - name: Install packages
