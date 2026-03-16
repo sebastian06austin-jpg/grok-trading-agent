@@ -1,8 +1,9 @@
-name: Daily Grok Trading Analysis
+name: Super Grok Trading Agent (Twice Daily)
 
 on:
   schedule:
-    - cron: '0 14 * * *'   # 7:30 PM IST every day
+    - cron: '30 2 * * *'    # 8:00 AM IST
+    - cron: '30 12 * * *'   # 6:00 PM IST
   workflow_dispatch:
 
 jobs:
@@ -15,8 +16,8 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install packages
-        run: pip install openai yfinance pandas requests
-      - name: Run Grok Agent
+        run: pip install openai yfinance pandas pandas_ta requests
+      - name: Run Super Grok Agent
         env:
           XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
